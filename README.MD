@@ -27,8 +27,6 @@ Fintreen.com wordpress php plugin for crypto-payment gateway API
 
 Tested on php 8.0, 8.1, 8.2. Should be also good with php 8.3.
 
-Use composer2 for this
-
 ### Installation:
 
 Just upload the plugin and activate. On the settings tab then you can set your token and email.
