@@ -3,7 +3,6 @@ Fintreen.com wordpress php plugin for crypto-payment gateway API
 
 [![MIT License][license-shield]][license-url]
 
-
 <h3 align="center">Fintreen.com wordpress php plugin</h3>
 
   <p align="center">
