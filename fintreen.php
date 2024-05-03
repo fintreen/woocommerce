@@ -61,7 +61,7 @@ function init_fintreen_gateway() {
 
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
-            //add_action( 'woocommerce_api_{webhook}', array( $this, 'fintreen' ) );
+            add_action( 'woocommerce_api_{webhook}', array( $this, 'fintreen' ) );
         }
 
         public function fintreen() 
@@ -138,6 +138,23 @@ if ($order_id) {
 );
         }
 
+        public function payment_fields()
+        {
+            echo '<select name="payment_method">
+                    <option value="USDT-TRC20">USDT-TRC20</option>
+                    <option value="ETH">ETH</option>
+                </select>';
+        }
+
+        public function validate_fields()
+        {
+            if(empty($_POST['payment_method'])) return array(
+                    'result' => 'failure',
+                    'redirect' => ''
+                );
+             $curr = $_POST['payment_method']
+        }
+
         public function process_payment($order_id) {
 
         	$cart_currency = WC()->cart->get_currency();
@@ -154,11 +171,11 @@ if ($order_id) {
         		);
         	}
 
-            $url = 'https://fintreen.com/api/v1/create';
+            $url = 'https://fintreen.com/api/v1/create';  
 			$data = array(
     			'fiatAmount' => $converted_amount,
     			'fiatCode' => 'EUR',
-    			'cryptoCode' => 'ETH',
+    			'cryptoCode' => $curr,
 			);
 
 			$headers = array(
@@ -205,4 +222,64 @@ $wpdb->insert($table_name, $data_to_insert);
     }
 
     add_filter('woocommerce_payment_gateways', 'add_fintreen_gateway_class');
+
+    // Регистрируем cron задачу для выполнения каждый час
+if (!wp_next_scheduled('check_orders_hourly_cron')) {
+    wp_schedule_event(time(), 'hourly', 'check_orders_hourly_cron');
+}
+
+// Запускаем функцию при выполнении cron задачи
+add_action('check_orders_hourly_cron', 'check_orders');
+function check_orders() {
+    global $wpdb;
+
+// Название таблицы в WordPress
+$table_name = $wpdb->prefix . 'fintreen_transactions';
+
+// SQL запрос для выборки значений fintreen_id
+$sql = "SELECT order_id, fintreen_id FROM $table_name";
+
+// Выполняем запрос к базе данных
+$results = $wpdb->get_results($sql);
+
+// Проверяем, были ли получены результаты
+if ($results) {
+    foreach ($results as $result) {
+         $order_id = $result->order_id;
+        $fintreen_id = $result->fintreen_id;
+        
+        $url = 'https://fintreen.com/api/v1/check';
+            $data = array(
+                'orderId' => $fintreen_id,
+            );
+
+            $headers = array(
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+                'fintreen_auth' => $this->get_option('api_token'),
+                'fintreen_signature' => sha1($this->get_option('api_token').$this->get_option('email'))
+            );
+
+            $args = array(
+                'body' => $data,
+                'headers' => $headers,
+            );
+
+            $response = wp_remote_get($url, $args);
+            $data = json_decode($response);
+
+            if($data['data']['statusId'] == 3) {
+                $order = wc_get_order($order_id); // Получаем объект заказа по его ID
+
+                if ($order) {
+                    $new_status = 'completed'; // Устанавливаем новый статус заказа как "успешный"
+
+    
+                    $order->update_status($new_status);
+            }
+    }
+}
+
+}
+
 }
